@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>SNR Trace Explorer</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+    <script src="/vendor/plotly.min.js"></script>
+  </head>
+  <body>
+    <main class="app-shell">
+      <aside class="sidebar">
+        <div class="brand">
+          <div class="mark"></div>
+          <div>
+            <h1>SNR Trace Explorer</h1>
+            <p>Experiment trace browser</p>
+          </div>
+        </div>
+
+        <section class="panel browser-panel">
+          <div class="panel-title">
+            <span>Folders</span>
+            <button id="upBtn" title="Go up">Up</button>
+          </div>
+          <div id="currentFolder" class="current-folder"></div>
+          <div id="folderList" class="folder-list"></div>
+        </section>
+
+        <section class="panel controls">
+          <label for="traceType">Trace type</label>
+          <select id="traceType"></select>
+
+          <label for="roiSelect">Cells</label>
+          <select id="roiSelect"></select>
+
+          <div class="toggle-row">
+            <input id="normalize" type="checkbox" checked />
+            <label for="normalize">Normalize traces</label>
+          </div>
+
+          <div class="toggle-row">
+            <input id="showSpikes" type="checkbox" checked />
+            <label for="showSpikes">Show spikes</label>
+          </div>
+
+          <label for="offsetInput">Vertical offset</label>
+          <input id="offsetInput" type="number" min="0" step="0.1" value="1.35" />
+
+          <label for="startFrameInput">Start frame</label>
+          <input id="startFrameInput" type="number" min="0" step="100" value="0" />
+
+          <div class="control-label-row">
+            <label for="highpassCutoffInput">High-pass cutoff</label>
+            <output id="highpassCutoffValue" for="highpassCutoffInput">100 Hz</output>
+          </div>
+          <input id="highpassCutoffInput" type="range" min="1" max="240" step="1" value="100" />
+
+          <button id="plotBtn" class="primary" title="Plot selected traces">Plot</button>
+        </section>
+      </aside>
+
+      <section class="workspace">
+        <header class="topbar">
+          <div>
+            <div id="experimentName" class="eyebrow">No experiment selected</div>
+            <h2 id="plotTitle">Browse to an experiment folder</h2>
+          </div>
+          <div id="status" class="status">Ready</div>
+        </header>
+
+        <div id="traceMeta" class="meta-strip"></div>
+        <div id="plot" class="plot"></div>
+      </section>
+    </main>
+
+    <script src="/static/app.js"></script>
+  </body>
+</html>

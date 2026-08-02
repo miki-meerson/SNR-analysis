@@ -1,0 +1,2 @@
+"""SNR analysis application package."""
+
