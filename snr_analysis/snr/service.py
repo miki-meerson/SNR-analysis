@@ -181,11 +181,24 @@ def calculate_snr_payload(
 
     csv_path = csvs[0]
     total_columns = count_columns(csv_path)
-    usecols = parse_trace_selection(roi, total_columns)
+    peaks_by_roi = load_detected_peaks(experiment_path)
+    selected_columns = parse_trace_selection(roi, total_columns)
+    requested_all_cells = roi.strip().lower() in {"", "all"}
+    requested_start_frame = max(int(start_frame), 0)
+    if requested_all_cells:
+        usecols = [
+            column
+            for column in selected_columns
+            if column in peaks_by_roi and np.any(peaks_by_roi[column] >= requested_start_frame)
+        ]
+    else:
+        usecols = selected_columns
+    if not usecols:
+        raise ValueError("No selected cells have detected spikes in the analyzed frame range")
+
     frame = pd.read_csv(csv_path, header=None, usecols=usecols)
     original_points = len(frame)
-    start_frame = min(max(int(start_frame), 0), original_points)
-    peaks_by_roi = load_detected_peaks(experiment_path)
+    start_frame = min(requested_start_frame, original_points)
     function: SNRMethod = method["function"]
     padding_before = max(int(padding_before), 0)
     padding_after = max(int(padding_after), 0)
@@ -234,6 +247,8 @@ def calculate_snr_payload(
         "total_columns": total_columns,
         "selected_columns": usecols,
         "selected_cell_ids": [column + 1 for column in usecols],
+        "requested_all_cells": requested_all_cells,
+        "ignored_cell_ids": [column + 1 for column in selected_columns if column not in usecols],
         "results": primary["results"],
         "summary": primary["summary"],
         "binned_results": primary["binned_results"],

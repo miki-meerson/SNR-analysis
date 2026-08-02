@@ -139,7 +139,7 @@ function renderSnrResults(payload) {
       ${summaryCards}
     </div>
     <div class="snr-context">
-      ${payload.method_label} on ${payload.signal_source_label}; HP cutoff ${payload.highpass_cutoff_hz} Hz; start ${payload.start_frame}; bin ${payload.bin_seconds}s; pad ${payload.padding_before}/${payload.padding_after}
+      ${payload.method_label} on ${payload.signal_source_label}; ${payload.selected_cell_ids.length} cells with spikes; HP cutoff ${payload.highpass_cutoff_hz} Hz; start ${payload.start_frame}; bin ${payload.bin_seconds}s; pad ${payload.padding_before}/${payload.padding_after}
     </div>
     ${tables}`;
 }
@@ -418,12 +418,12 @@ function buildSnrPlot(payload) {
       type: "scatter",
       mode: "lines+markers",
       name: meanName,
-      line: { width: 2.4, color },
-      marker: { size: 6, color },
+      line: { width: 3.2, color },
+      marker: { size: 6.5, color },
       hovertemplate: `${meanName}<br>Time %{x:.1f}s<br>SNR %{y:.3f}<extra></extra>`,
     });
 
-    if (group.binned_results.length > 1 && group.binned_results.length <= 6) {
+    if (group.binned_results.length > 1) {
       for (const cell of group.binned_results) {
         traces.push({
           x: cell.bins.map((item) => item.center_seconds),
@@ -431,8 +431,9 @@ function buildSnrPlot(payload) {
           type: "scatter",
           mode: "lines",
           name: `${group.signal_source_label} Cell ${cell.cell_id}`,
-          line: { width: 1.1, color, dash: "dot" },
-          opacity: 0.42,
+          line: { width: 0.85, color },
+          opacity: 0.22,
+          showlegend: false,
           hovertemplate: `${group.signal_source_label} Cell ${cell.cell_id}<br>Time %{x:.1f}s<br>SNR %{y:.3f}<extra></extra>`,
         });
       }
