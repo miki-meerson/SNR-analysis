@@ -27,37 +27,72 @@
           <div id="folderList" class="folder-list"></div>
         </section>
 
-        <section class="panel controls">
-          <label for="traceType">Trace type</label>
-          <select id="traceType"></select>
+        <div class="tool-panels">
+          <section class="panel controls">
+            <label for="traceType">Trace type</label>
+            <select id="traceType"></select>
 
-          <label for="roiSelect">Cells</label>
-          <select id="roiSelect"></select>
+            <label for="roiSelect">Cells</label>
+            <select id="roiSelect"></select>
 
-          <div class="toggle-row">
-            <input id="normalize" type="checkbox" checked />
-            <label for="normalize">Normalize traces</label>
-          </div>
+            <div class="toggle-row">
+              <input id="normalize" type="checkbox" checked />
+              <label for="normalize">Normalize traces</label>
+            </div>
 
-          <div class="toggle-row">
-            <input id="showSpikes" type="checkbox" checked />
-            <label for="showSpikes">Show spikes</label>
-          </div>
+            <div class="toggle-row">
+              <input id="showSpikes" type="checkbox" checked />
+              <label for="showSpikes">Show spikes</label>
+            </div>
 
-          <label for="offsetInput">Vertical offset</label>
-          <input id="offsetInput" type="number" min="0" step="0.1" value="1.35" />
+            <label for="offsetInput">Vertical offset</label>
+            <input id="offsetInput" type="number" min="0" step="0.1" value="1.35" />
 
-          <label for="startFrameInput">Start frame</label>
-          <input id="startFrameInput" type="number" min="0" step="100" value="0" />
+            <label for="startFrameInput">Start frame</label>
+            <input id="startFrameInput" type="number" min="0" step="100" value="0" />
 
-          <div class="control-label-row">
-            <label for="highpassCutoffInput">High-pass cutoff</label>
-            <output id="highpassCutoffValue" for="highpassCutoffInput">100 Hz</output>
-          </div>
-          <input id="highpassCutoffInput" type="range" min="1" max="240" step="1" value="100" />
+            <div class="control-label-row">
+              <label for="highpassCutoffInput">High-pass cutoff</label>
+              <output id="highpassCutoffValue" for="highpassCutoffInput">100 Hz</output>
+            </div>
+            <input id="highpassCutoffInput" type="range" min="1" max="240" step="1" value="100" />
 
-          <button id="plotBtn" class="primary" title="Plot selected traces">Plot</button>
-        </section>
+            <button id="plotBtn" class="primary" title="Plot selected traces">Plot</button>
+          </section>
+
+          <section class="panel snr-panel">
+            <div class="panel-title">
+              <span>SNR</span>
+            </div>
+
+            <label for="snrMethod">Method</label>
+            <select id="snrMethod"></select>
+
+            <label for="snrSignalSource">Signal</label>
+            <select id="snrSignalSource">
+              <option value="both" selected>Regular + high-pass</option>
+              <option value="trace">Regular trace</option>
+              <option value="highpass">High-pass trace</option>
+            </select>
+
+            <div class="split-controls">
+              <div>
+                <label for="snrPaddingBefore">Pad before</label>
+                <input id="snrPaddingBefore" type="number" min="0" step="1" value="2" />
+              </div>
+              <div>
+                <label for="snrPaddingAfter">Pad after</label>
+                <input id="snrPaddingAfter" type="number" min="0" step="1" value="2" />
+              </div>
+            </div>
+
+            <label for="snrBinSeconds">Time bin size (s)</label>
+            <input id="snrBinSeconds" type="number" min="0.1" step="0.5" value="10" />
+
+            <button id="snrBtn" title="Calculate SNR">Calculate SNR</button>
+            <div id="snrResults" class="snr-results muted">No SNR calculated</div>
+          </section>
+        </div>
       </aside>
 
       <section class="workspace">
@@ -66,7 +101,13 @@
             <div id="experimentName" class="eyebrow">No experiment selected</div>
             <h2 id="plotTitle">Browse to an experiment folder</h2>
           </div>
-          <div id="status" class="status">Ready</div>
+          <div class="topbar-actions">
+            <div class="view-tabs">
+              <button id="traceViewBtn" class="view-tab active" title="Show traces">Traces</button>
+              <button id="snrViewBtn" class="view-tab" title="Show SNR over time">SNR</button>
+            </div>
+            <div id="status" class="status">Ready</div>
+          </div>
         </header>
 
         <div id="traceMeta" class="meta-strip"></div>

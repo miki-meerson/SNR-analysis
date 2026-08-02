@@ -4,9 +4,8 @@ import numpy as np
 import pandas as pd
 from scipy import signal
 
+from .config import DEFAULT_HIGHPASS_CUTOFF_HZ, DEFAULT_SAMPLING_HZ
 
-DEFAULT_SAMPLING_HZ = 500.0
-DEFAULT_HIGHPASS_CUTOFF_HZ = 100.0
 HIGHPASS_FILTER_ORDER = 3
 
 

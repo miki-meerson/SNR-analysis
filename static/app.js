@@ -2,7 +2,11 @@ const state = {
   folderPath: "",
   experimentPath: "",
   traceTypes: [],
+  snrMethods: [],
   spikeRoiIndices: new Set(),
+  activeView: "traces",
+  lastTracePayload: null,
+  lastSnrPayload: null,
 };
 
 const el = {
@@ -18,6 +22,15 @@ const el = {
   highpassCutoffInput: document.getElementById("highpassCutoffInput"),
   highpassCutoffValue: document.getElementById("highpassCutoffValue"),
   plotBtn: document.getElementById("plotBtn"),
+  snrMethod: document.getElementById("snrMethod"),
+  snrSignalSource: document.getElementById("snrSignalSource"),
+  snrPaddingBefore: document.getElementById("snrPaddingBefore"),
+  snrPaddingAfter: document.getElementById("snrPaddingAfter"),
+  snrBinSeconds: document.getElementById("snrBinSeconds"),
+  snrBtn: document.getElementById("snrBtn"),
+  snrResults: document.getElementById("snrResults"),
+  traceViewBtn: document.getElementById("traceViewBtn"),
+  snrViewBtn: document.getElementById("snrViewBtn"),
   experimentName: document.getElementById("experimentName"),
   plotTitle: document.getElementById("plotTitle"),
   traceMeta: document.getElementById("traceMeta"),
@@ -26,6 +39,7 @@ const el = {
 };
 
 let plotRequestId = 0;
+let snrRequestId = 0;
 
 function setStatus(message) {
   el.status.textContent = message;
@@ -54,15 +68,106 @@ function renderMeta(items) {
   }
 }
 
+function formatMetric(value, digits = 4) {
+  if (value === null || value === undefined || Number.isNaN(Number(value))) {
+    return "n/a";
+  }
+  return Number(value).toFixed(digits);
+}
+
+function populateSnrMethods(methods) {
+  state.snrMethods = methods || [];
+  el.snrMethod.innerHTML = "";
+  for (const method of state.snrMethods) {
+    const option = document.createElement("option");
+    option.value = method.key;
+    option.textContent = method.label;
+    el.snrMethod.appendChild(option);
+  }
+}
+
+function renderSnrResults(payload) {
+  const resultGroups = payload.signal_results || { [payload.signal_source]: payload };
+  const summaryCards = Object.values(resultGroups)
+    .map(
+      (group) => `
+        <div>
+          <span>${group.signal_source_label}</span>
+          <strong>${formatMetric(group.summary.mean_snr, 3)}</strong>
+        </div>`,
+    )
+    .join("");
+  const tables = Object.values(resultGroups)
+    .map((group) => {
+      const rows = group.results
+        .map(
+          (item) => `
+            <tr>
+              <td>${item.cell_id}</td>
+              <td>${formatMetric(item.snr, 3)}</td>
+              <td>${formatMetric(item.average_spike_height, 4)}</td>
+              <td>${formatMetric(item.noise_std, 4)}</td>
+              <td>${item.spike_count}</td>
+              <td>${item.noise_frame_count}</td>
+            </tr>`,
+        )
+        .join("");
+
+      return `
+        <div class="snr-table-title">${group.signal_source_label}</div>
+        <div class="snr-table-wrap">
+          <table class="snr-table">
+            <thead>
+              <tr>
+                <th>Cell</th>
+                <th>SNR</th>
+                <th>Spike avg</th>
+                <th>Noise SD</th>
+                <th>Spikes</th>
+                <th>Noise</th>
+              </tr>
+            </thead>
+            <tbody>${rows}</tbody>
+          </table>
+        </div>`;
+    })
+    .join("");
+
+  el.snrResults.className = "snr-results";
+  el.snrResults.innerHTML = `
+    <div class="snr-summary">
+      ${summaryCards}
+    </div>
+    <div class="snr-context">
+      ${payload.method_label} on ${payload.signal_source_label}; HP cutoff ${payload.highpass_cutoff_hz} Hz; start ${payload.start_frame}; bin ${payload.bin_seconds}s; pad ${payload.padding_before}/${payload.padding_after}
+    </div>
+    ${tables}`;
+}
+
+function clearSnrResults() {
+  state.lastSnrPayload = null;
+  el.snrResults.className = "snr-results muted";
+  el.snrResults.textContent = "No SNR calculated";
+}
+
+function setActiveView(view) {
+  state.activeView = view;
+  el.traceViewBtn.classList.toggle("active", view === "traces");
+  el.snrViewBtn.classList.toggle("active", view === "snr");
+}
+
 function clearExperiment() {
   state.experimentPath = "";
   state.traceTypes = [];
   state.spikeRoiIndices = new Set();
+  state.lastTracePayload = null;
+  state.lastSnrPayload = null;
   el.experimentName.textContent = "No experiment selected";
   el.plotTitle.textContent = "Browse to an experiment folder";
   el.traceType.innerHTML = "";
   el.roiSelect.innerHTML = "";
   renderMeta([]);
+  clearSnrResults();
   Plotly.purge(el.plot);
 }
 
@@ -295,6 +400,79 @@ function buildPlot(payload) {
   }).then(() => Plotly.Plots.resize(el.plot));
 }
 
+function buildSnrPlot(payload) {
+  const colors = {
+    trace: "#ff2f75",
+    highpass: "#00f0a8",
+  };
+  const resultGroups = payload.signal_results || { [payload.signal_source]: payload };
+  const traces = [];
+  const selectedCellCount = payload.selected_cell_ids.length;
+
+  for (const [source, group] of Object.entries(resultGroups)) {
+    const color = colors[source] || "#22c7ff";
+    const meanName = selectedCellCount === 1 ? `${group.signal_source_label} SNR` : `${group.signal_source_label} mean`;
+    traces.push({
+      x: group.time_summary.map((item) => item.center_seconds),
+      y: group.time_summary.map((item) => item.mean_snr),
+      type: "scatter",
+      mode: "lines+markers",
+      name: meanName,
+      line: { width: 2.4, color },
+      marker: { size: 6, color },
+      hovertemplate: `${meanName}<br>Time %{x:.1f}s<br>SNR %{y:.3f}<extra></extra>`,
+    });
+
+    if (group.binned_results.length > 1 && group.binned_results.length <= 6) {
+      for (const cell of group.binned_results) {
+        traces.push({
+          x: cell.bins.map((item) => item.center_seconds),
+          y: cell.bins.map((item) => item.snr),
+          type: "scatter",
+          mode: "lines",
+          name: `${group.signal_source_label} Cell ${cell.cell_id}`,
+          line: { width: 1.1, color, dash: "dot" },
+          opacity: 0.42,
+          hovertemplate: `${group.signal_source_label} Cell ${cell.cell_id}<br>Time %{x:.1f}s<br>SNR %{y:.3f}<extra></extra>`,
+        });
+      }
+    }
+  }
+
+  const layout = {
+    autosize: true,
+    paper_bgcolor: "rgba(0,0,0,0)",
+    plot_bgcolor: "#080c14",
+    font: { color: "#dbe6f7" },
+    margin: { l: 58, r: 24, t: 22, b: 52 },
+    xaxis: {
+      title: "Time (s)",
+      gridcolor: "rgba(255,255,255,0.07)",
+      zerolinecolor: "rgba(255,255,255,0.12)",
+    },
+    yaxis: {
+      title: "SNR",
+      gridcolor: "rgba(255,255,255,0.07)",
+      zerolinecolor: "rgba(255,255,255,0.12)",
+    },
+    legend: {
+      orientation: "h",
+      yanchor: "bottom",
+      y: 1.02,
+      xanchor: "right",
+      x: 1,
+      bgcolor: "rgba(8,12,20,0.72)",
+    },
+    hovermode: "closest",
+  };
+
+  Plotly.react(el.plot, traces, layout, {
+    responsive: true,
+    displaylogo: false,
+    modeBarButtonsToRemove: ["lasso2d", "select2d"],
+  }).then(() => Plotly.Plots.resize(el.plot));
+}
+
 async function plotTraces() {
   if (!state.experimentPath) {
     setStatus("Browse to an experiment folder first");
@@ -322,6 +500,8 @@ async function plotTraces() {
     }
 
     buildPlot(payload);
+    state.lastTracePayload = payload;
+    setActiveView("traces");
     el.plotTitle.textContent = payload.trace_type;
     renderMeta([
       `${payload.selected_cell_ids.length} selected of ${payload.total_columns} cells`,
@@ -345,13 +525,69 @@ async function plotTraces() {
   }
 }
 
+async function calculateSnr() {
+  if (!state.experimentPath) {
+    setStatus("Browse to an experiment folder first");
+    return;
+  }
+
+  const requestId = ++snrRequestId;
+  setStatus("Calculating SNR...");
+  el.snrBtn.disabled = true;
+  try {
+    const payload = await getJson(
+      `/api/snr?${params({
+        experiment_path: state.experimentPath,
+        trace_type: el.traceType.value,
+        roi: el.roiSelect.value,
+        method: el.snrMethod.value || "basic",
+        signal_source: el.snrSignalSource.value,
+        highpass_cutoff_hz: el.highpassCutoffInput.value,
+        padding_before: el.snrPaddingBefore.value,
+        padding_after: el.snrPaddingAfter.value,
+        start_frame: el.startFrameInput.value,
+        bin_seconds: el.snrBinSeconds.value,
+      })}`,
+    );
+    if (requestId !== snrRequestId) {
+      return;
+    }
+    state.lastSnrPayload = payload;
+    renderSnrResults(payload);
+    buildSnrPlot(payload);
+    setActiveView("snr");
+    el.plotTitle.textContent = `SNR over time - ${payload.trace_type}`;
+    setStatus("SNR calculated");
+  } finally {
+    if (requestId === snrRequestId) {
+      el.snrBtn.disabled = false;
+    }
+  }
+}
+
 function updateHighpassCutoffLabel() {
   el.highpassCutoffValue.value = `${el.highpassCutoffInput.value} Hz`;
+}
+
+function handleHighpassCutoffChange() {
+  updateHighpassCutoffLabel();
+  if (state.lastSnrPayload || state.activeView === "snr") {
+    calculateSnr().catch((error) => setStatus(error.message));
+    return;
+  }
+  clearSnrResults();
+  plotTraces().catch((error) => setStatus(error.message));
 }
 
 async function boot() {
   try {
     const defaults = await getJson("/api/defaults");
+    populateSnrMethods(defaults.snr_methods);
+    el.snrPaddingBefore.value = defaults.default_snr_padding_before;
+    el.snrPaddingAfter.value = defaults.default_snr_padding_after;
+    el.snrBinSeconds.value = defaults.default_snr_bin_seconds;
+    el.highpassCutoffInput.value = defaults.default_highpass_cutoff_hz;
+    updateHighpassCutoffLabel();
     await browse(defaults.data_root);
   } catch (error) {
     setStatus(error.message);
@@ -359,17 +595,48 @@ async function boot() {
 }
 
 el.plotBtn.addEventListener("click", () => plotTraces().catch((error) => setStatus(error.message)));
+el.snrBtn.addEventListener("click", () => calculateSnr().catch((error) => setStatus(error.message)));
+el.traceViewBtn.addEventListener("click", () => {
+  if (!state.lastTracePayload) {
+    setStatus("Plot traces first");
+    return;
+  }
+  buildPlot(state.lastTracePayload);
+  setActiveView("traces");
+  el.plotTitle.textContent = state.lastTracePayload.trace_type;
+});
+el.snrViewBtn.addEventListener("click", () => {
+  if (!state.lastSnrPayload) {
+    setStatus("Calculate SNR first");
+    return;
+  }
+  buildSnrPlot(state.lastSnrPayload);
+  setActiveView("snr");
+  el.plotTitle.textContent = `SNR over time - ${state.lastSnrPayload.trace_type}`;
+});
 el.upBtn.addEventListener("click", () => browse(el.upBtn.dataset.parent).catch((error) => setStatus(error.message)));
 el.traceType.addEventListener("change", () => {
   populateRois();
+  clearSnrResults();
   plotTraces().catch((error) => setStatus(error.message));
 });
-el.roiSelect.addEventListener("change", () => plotTraces().catch((error) => setStatus(error.message)));
+el.roiSelect.addEventListener("change", () => {
+  clearSnrResults();
+  plotTraces().catch((error) => setStatus(error.message));
+});
 el.normalize.addEventListener("change", () => plotTraces().catch((error) => setStatus(error.message)));
 el.showSpikes.addEventListener("change", () => plotTraces().catch((error) => setStatus(error.message)));
-el.startFrameInput.addEventListener("change", () => plotTraces().catch((error) => setStatus(error.message)));
+el.startFrameInput.addEventListener("change", () => {
+  clearSnrResults();
+  plotTraces().catch((error) => setStatus(error.message));
+});
 el.highpassCutoffInput.addEventListener("input", updateHighpassCutoffLabel);
-el.highpassCutoffInput.addEventListener("change", () => plotTraces().catch((error) => setStatus(error.message)));
+el.highpassCutoffInput.addEventListener("change", handleHighpassCutoffChange);
+el.snrMethod.addEventListener("change", clearSnrResults);
+el.snrSignalSource.addEventListener("change", clearSnrResults);
+el.snrPaddingBefore.addEventListener("change", clearSnrResults);
+el.snrPaddingAfter.addEventListener("change", clearSnrResults);
+el.snrBinSeconds.addEventListener("change", clearSnrResults);
 
 window.addEventListener("resize", () => Plotly.Plots.resize(el.plot));
 updateHighpassCutoffLabel();

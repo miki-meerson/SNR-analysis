@@ -14,11 +14,15 @@ from .config import (
     DEFAULT_EXPERIMENT,
     DEFAULT_HIGHPASS_CUTOFF_HZ,
     DEFAULT_NORMALIZATION_METHOD,
+    DEFAULT_SNR_BIN_SECONDS,
+    DEFAULT_SNR_PADDING_AFTER,
+    DEFAULT_SNR_PADDING_BEFORE,
     PLOT_POINT_LIMIT,
     STATIC_DIR,
 )
 from .folders import browse_folder
 from .http_utils import error_response, json_response, parse_path
+from .snr import calculate_snr_payload, get_snr_methods
 from .traces import get_experiment_trace_info, load_trace_payload
 
 
@@ -43,6 +47,11 @@ class SNRRequestHandler(BaseHTTPRequestHandler):
                     {
                         "data_root": str(DEFAULT_DATA_ROOT),
                         "default_experiment": str(DEFAULT_EXPERIMENT),
+                        "snr_methods": get_snr_methods(),
+                        "default_snr_padding_before": DEFAULT_SNR_PADDING_BEFORE,
+                        "default_snr_padding_after": DEFAULT_SNR_PADDING_AFTER,
+                        "default_snr_bin_seconds": DEFAULT_SNR_BIN_SECONDS,
+                        "default_highpass_cutoff_hz": DEFAULT_HIGHPASS_CUTOFF_HZ,
                     },
                 )
             elif parsed.path == "/api/browse":
@@ -74,6 +83,32 @@ class SNRRequestHandler(BaseHTTPRequestHandler):
                     offset,
                 )
                 json_response(self, payload)
+            elif parsed.path == "/api/snr":
+                path = parse_path(query.get("experiment_path", [None])[0], DEFAULT_EXPERIMENT)
+                trace_key = query.get("trace_type", ["mcsf"])[0]
+                roi = query.get("roi", ["all"])[0]
+                method = query.get("method", ["basic"])[0]
+                signal_source = query.get("signal_source", ["both"])[0]
+                highpass_cutoff_hz = float(query.get("highpass_cutoff_hz", [str(DEFAULT_HIGHPASS_CUTOFF_HZ)])[0])
+                padding_before = int(query.get("padding_before", [str(DEFAULT_SNR_PADDING_BEFORE)])[0])
+                padding_after = int(query.get("padding_after", [str(DEFAULT_SNR_PADDING_AFTER)])[0])
+                start_frame = int(query.get("start_frame", ["0"])[0])
+                bin_seconds = float(query.get("bin_seconds", [str(DEFAULT_SNR_BIN_SECONDS)])[0])
+                json_response(
+                    self,
+                    calculate_snr_payload(
+                        path,
+                        trace_key,
+                        roi,
+                        method,
+                        signal_source,
+                        highpass_cutoff_hz,
+                        padding_before,
+                        padding_after,
+                        start_frame,
+                        bin_seconds,
+                    ),
+                )
             else:
                 error_response(self, "Not found", HTTPStatus.NOT_FOUND)
         except Exception as exc:
